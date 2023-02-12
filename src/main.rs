@@ -1,6 +1,5 @@
 #[macro_use] extern crate rocket;
 
-use std::{env::VarError, time::Duration, net::IpAddr};
 use dotenvy::dotenv;
 
 mod control;
@@ -16,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     let (tx, rx) = rocket::tokio::sync::mpsc::channel(5);
 
-    // Start the server controller task
+    // Start the server control "thread"
     rocket::tokio::spawn(async move {
         control::control(rx).await;
     });
@@ -25,9 +24,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Start the web server
     let _ = rocket::build()
-        .manage(tx)
-        .mount("/", routes![navigation::index])
+        .manage(tx) // Webserver can send messages to control thread
         .mount("/api", routes![api::query, api::address, api::start])
+        .mount("/", routes![navigation::index])
         .launch()
         .await?;
 
