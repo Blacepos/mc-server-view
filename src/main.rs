@@ -1,6 +1,9 @@
 #[macro_use] extern crate rocket;
 
+use std::net::Ipv4Addr;
+
 use dotenvy::dotenv;
+use rocket::Config;
 
 mod control;
 mod attempt;
@@ -24,6 +27,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Start the web server
     let _ = rocket::build()
+        .configure(Config {
+            address: Ipv4Addr::UNSPECIFIED.into(),
+            port: 3000,
+            ..Default::default()
+        })
         .manage(tx) // Webserver can send messages to control thread
         .mount("/api", routes![api::query, api::address, api::start])
         .mount("/", routes![navigation::index])
