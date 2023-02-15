@@ -80,7 +80,8 @@ pub async fn control(mut msg: mpsc::Receiver<ControlCmd>) {
                         break;
                     }
                 },
-                Err(_) => {
+                Err(e) => {
+                    println!("Failed to query: {e:?}");
                     try_stop_server(&mut mc_server, &mut rcon_client).await;
                     break;
                 },
@@ -174,5 +175,5 @@ async fn query_server() -> std::io::Result<StatusResponse> {
 
     let port = std::env::var("QUERY_PORT").unwrap().parse().unwrap();
 
-    mc_query::status("localhost", port).await
+    mc_query::status("127.0.0.1", port).await
 }
