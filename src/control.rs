@@ -173,7 +173,7 @@ async fn try_stop_server(mc_server: &mut Child, rcon_client: &mut RconClient) {
 
 async fn query_server() -> std::io::Result<StatusResponse> {
 
-    let port = std::env::var("QUERY_PORT").unwrap().parse().unwrap();
+    let port = std::env::var("MINECRAFT_PORT").unwrap().parse().unwrap();
 
-    mc_query::status("127.0.0.1", port).await
+    mc_query::status("localhost", port).await
 }

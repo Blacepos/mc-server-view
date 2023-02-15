@@ -31,6 +31,6 @@ Note before you begin: you only need to forward 2 ports (80 and 25565) even thou
     - enable-rcon=true
 	- rcon.password=\<some password\>
 	- rcon.port=\<some unused port\>
-	- enable-query=true
-	- query.port=\<some unused port\>
+	- ~~enable-query=true~~
+	- ~~query.port=\<some unused port\>~~
 6. Set corresponding values in .env to be the same as in server.properties
