@@ -20,7 +20,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let run_command = std::env::var("RUN_COMMAND").unwrap(); // nice
     let path = std::path::Path::new(&server_path).join(run_command);
 
-    if let Ok(mut child) = std::process::Command::new(&path).current_dir(&server_path).spawn().unwrap() {
+    child = std::process::Command::new(&path).current_dir(&server_path).spawn().unwrap();
+    {
         println!("Could not execute run.sh. Does the server have one?");
     };
 
