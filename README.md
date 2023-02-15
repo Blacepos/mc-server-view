@@ -25,6 +25,7 @@ Note before you begin: you only need to forward 2 ports (80 and 25565) even thou
 3. Find a place to store the servers. Edit SERVER_PATH in .env to point to a server folder.
     - Suggestion: create a folder to store the Minecraft servers. Inside that, create a unique folder for each server.
 4. Create a shell script (e.g. run.bat or run.sh) and add the java jar command to run the server.
+    - Make sure to add a shebang (like #!/bin/bash) to the top of the script on Linux
     - Set RUN_COMMAND to be the name of the script.
 5. Set the following values in server.properties:
     - enable-rcon=true
