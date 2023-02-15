@@ -47,6 +47,7 @@ pub async fn control(mut msg: mpsc::Receiver<ControlCmd>) {
             match timeout(Duration::from_secs(IDLE_QUERY_PERIOD_SEC), msg.recv()).await {
                 Ok(Some(StopServer)) => {
                     try_stop_server(&mut mc_server, &mut rcon_client).await;
+                    break;
                 },
                 Ok(Some(Query(webserver_tx))) => {
                     // query minecraft server and tell webserver result
@@ -76,10 +77,12 @@ pub async fn control(mut msg: mpsc::Receiver<ControlCmd>) {
                     // Stop the server if it has been idle for too long
                     if Instant::now() - idle_begin > idle_timeout {
                         try_stop_server(&mut mc_server, &mut rcon_client).await;
+                        break;
                     }
                 },
                 Err(_) => {
                     try_stop_server(&mut mc_server, &mut rcon_client).await;
+                    break;
                 },
             }
         }
