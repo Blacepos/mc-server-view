@@ -110,7 +110,7 @@ async fn start_server() -> Result<(Child, RconClient), StartServerError> {
     let path = Path::new(&server_path).join(run_command);
 
     // Attempt to execute "run.sh" on the server located at SERVER_PATH
-    let Ok(mut child) = std::process::Command::new(&path).current_dir(&path).spawn() else {
+    let Ok(mut child) = std::process::Command::new(&path).current_dir(&server_path).spawn() else {
         println!("Could not execute run.sh. Does the server have one?");
 
         return Err(ProcessStart);
