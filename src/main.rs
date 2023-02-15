@@ -16,27 +16,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().expect(".env file should exist");
     ensure_env()?;
     
-    let (tx, rx) = rocket::tokio::sync::mpsc::channel(5);
+    let server_path = std::env::var("SERVER_PATH").unwrap(); //
+    let run_command = std::env::var("RUN_COMMAND").unwrap(); // nice
+    let path = std::path::Path::new(&server_path).join(run_command);
 
-    // Start the server control "thread"
-    rocket::tokio::spawn(async move {
-        control::control(rx).await;
-    });
+    if let Ok(mut child) = std::process::Command::new(&path).current_dir(&server_path).spawn() {
+        println!("Could not execute run.sh. Does the server have one?");
+    };
 
-    println!("Control Started.");
+    // let (tx, rx) = rocket::tokio::sync::mpsc::channel(5);
+
+    // // Start the server control "thread"
+    // rocket::tokio::spawn(async move {
+    //     control::control(rx).await;
+    // });
+
+    // println!("Control Started.");
     
-    // Start the web server
-    let _ = rocket::build()
-        .configure(Config {
-            address: Ipv4Addr::UNSPECIFIED.into(),
-            port: 3000,
-            ..Default::default()
-        })
-        .manage(tx) // Webserver can send messages to control thread
-        .mount("/api", routes![api::query, api::address, api::start])
-        .mount("/", routes![navigation::index])
-        .launch()
-        .await?;
+    // // Start the web server
+    // let _ = rocket::build()
+    //     .configure(Config {
+    //         address: Ipv4Addr::UNSPECIFIED.into(),
+    //         port: 3000,
+    //         ..Default::default()
+    //     })
+    //     .manage(tx) // Webserver can send messages to control thread
+    //     .mount("/api", routes![api::query, api::address, api::start])
+    //     .mount("/", routes![navigation::index])
+    //     .launch()
+    //     .await?;
 
     Ok(())
 }
