@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start the web server
     let _ = rocket::build()
         .configure(Config {
-            address: Ipv4Addr::LOCALHOST.into(),
+            address: Ipv4Addr::UNSPECIFIED.into(),
             port: settings.webserver_port,
             log_level: rocket::log::LogLevel::Debug,
             ..Default::default()
