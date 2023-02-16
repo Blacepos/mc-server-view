@@ -12,6 +12,7 @@ use crate::attempt::{self, attempt};
 const IDLE_QUERY_PERIOD_SEC: u64 = 30;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ControlCmd {
     StartServer,
     StopServer,

@@ -5,6 +5,7 @@ use rocket::tokio::time::sleep;
 
 const AWAIT_DURATION_MS: u64 = 50;
 
+#[allow(dead_code)]
 pub enum Method {
     Timeout(Duration),
     Deadline(Instant),
