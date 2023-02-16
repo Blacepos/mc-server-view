@@ -627,11 +627,11 @@ dependencies = [
 [[package]]
 name = "mc-query"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3de1cab905c562a4c99df69829d53d90e3b860451cacb24f4941e20f5e15386d"
+source = "git+https://github.com/dheerajpv/mc-query?branch=main#0e50e120fa2847d35f26927b13a7ef6345b7f182"
 dependencies = [
  "async-trait",
  "bytes",
+ "rand",
  "serde",
  "serde_json",
  "thiserror",
