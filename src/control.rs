@@ -8,6 +8,7 @@ use rocket::tokio::{sync::{mpsc, oneshot}, time::timeout};
 use thiserror::Error;
 
 use crate::attempt::{self, attempt};
+use crate::env::Env;
 
 const IDLE_QUERY_PERIOD_SEC: u64 = 30;
 
@@ -19,78 +20,105 @@ pub enum ControlCmd {
     Query(oneshot::Sender<Option<StatusResponse>>) // I love this.
 }
 
-pub async fn control(mut msg: mpsc::Receiver<ControlCmd>) {
-    
-    use ControlCmd::*;
-    
+pub async fn control(mut msg: mpsc::Receiver<ControlCmd>, settings: Env) {
     loop {
         // Thread idle (mc server offline)
-        let (mut mc_server, mut rcon_client) = loop {
-            match msg.recv().await {
-                Some(StartServer) => {
-                    if let Ok((mc, rc)) = start_server().await {
-                        break (mc, rc);
-                    }
-                },
-                // Note: if Query is sent, tx will be immediately dropped, so rx won't block the webserver
-                Some(other) => println!("Web server sent a message other than \"StartServer\": {other:?}"),
-                None => println!("Error while awaiting web server message"),
-            }
-        };
-
-        let idle_timeout = std::env::var("MINECRAFT_IDLE_TIMEOUT").unwrap().parse().unwrap();
-        let idle_timeout = Duration::from_secs(idle_timeout);
-        let mut idle_begin = Instant::now();
+        let (mc_server, rcon_client) = thread_idle(&mut msg, &settings).await;
 
         // Thread active (mc server online)
-        loop {
-            // Check for messages from the webserver
-            match timeout(Duration::from_secs(IDLE_QUERY_PERIOD_SEC), msg.recv()).await {
-                Ok(Some(StopServer)) => {
-                    try_stop_server(&mut mc_server, &mut rcon_client).await;
-                    break;
-                },
-                Ok(Some(Query(webserver_tx))) => {
-                    // query minecraft server and tell webserver result
-                    let response = query_server().await.ok();
+        thread_active(&mut msg, &settings, mc_server, rcon_client).await;
+    }
+}
 
-                    if webserver_tx.send(response).is_err() {
-                        println!("Webserver did not get the status (receiver hung up)");
-                    }
-                },
-                Ok(Some(_)) => {},
-                Ok(None) => {},
-                Err(_) => {}, // No messages
-            }
+/// Patiently wait for commands from the webserver. Upon being told to start Minecraft, spawns the 
+/// process and returns a process handle and RCON client.
+async fn thread_idle(msg: &mut mpsc::Receiver<ControlCmd>, settings: &Env) -> (Child, RconClient) {
+    
+    use ControlCmd::*;
 
-            // query number of players; if > 0, reset timer. if timer > timeout, stop server.
-            // also, if query fails, we must close the server because we don't want it running
-            // indefinitely
-            match query_server().await {
-                Ok(status) => {
-                    println!("Queried Minecraft, got status {status:?}");
-                    
-                    // reset the idle timer if there are players online
-                    if status.players.online > 0 {
-                        idle_begin = Instant::now();
-                    }
-
-                    // Stop the server if it has been idle for too long
-                    if Instant::now() - idle_begin > idle_timeout {
-                        try_stop_server(&mut mc_server, &mut rcon_client).await;
-                        break;
-                    }
-                },
-                Err(e) => {
-                    println!("Failed to query: {e:?}");
-                    try_stop_server(&mut mc_server, &mut rcon_client).await;
-                    break;
-                },
-            }
+    loop {
+        match msg.recv().await {
+            Some(StartServer) => {
+                if let Ok((mc, rc)) = start_server(settings).await {
+                    break (mc, rc);
+                }
+            },
+            Some(Query(_)) => info!("Received a query, but the server wasn't online"),
+            // Note: if Query is sent, tx will be immediately dropped, so rx won't block the webserver
+            Some(other) => warn!("Webserver sent a message other than \"StartServer\": {other:?}"),
+            None => warn!("Error while awaiting web server message"),
         }
     }
 }
 
+/// Await webserver commands and ping Minecraft periodically.
+/// 
+/// Stops Minecraft if:
+/// - Webserver says to shut down Minecraft
+/// - Periodic pings return 0 online players for longer than MINECRAFT_IDLE_TIMEOUT
+/// - A single ping fails for whatever reason
+async fn thread_active(
+    msg: &mut mpsc::Receiver<ControlCmd>,
+    settings: &Env,
+    mut mc_server: Child,
+    mut rcon_client: RconClient
+) {
+    
+    use ControlCmd::*;
+
+    let idle_timeout = Duration::from_secs(settings.minecraft_idle_timeout);
+    let mut idle_begin = Instant::now();
+    
+    loop {
+        // Check for messages from the webserver
+        match timeout(Duration::from_secs(IDLE_QUERY_PERIOD_SEC), msg.recv()).await {
+            Ok(Some(StopServer)) => {
+                try_stop_server(&mut mc_server, &mut rcon_client).await;
+                break;
+            },
+            Ok(Some(Query(webserver_tx))) => {
+                // query minecraft server and tell webserver result
+                let response = mc_query::status("localhost", settings.minecraft_port).await
+                    .ok();
+
+                if webserver_tx.send(response).is_err() {
+                    warn!("Webserver did not get the status (receiver hung up)");
+                }
+            },
+            Ok(Some(_)) => {},
+            Ok(None) => {},
+            Err(_) => {}, // No messages
+        }
+
+        // Query number of players: if > 0, reset timer; if timer > timeout, stop server.
+        // Also, if query fails, we must close the server because we don't want it running
+        // indefinitely.
+        match mc_query::status("localhost", settings.minecraft_port).await {
+            Ok(status) => {
+                debug!("Queried Minecraft, got status {status:?}");
+                
+                // reset the idle timer if there are players online
+                if status.players.online > 0 {
+                    idle_begin = Instant::now();
+                }
+
+                // Stop the server if it has been idle for too long
+                if Instant::now() - idle_begin > idle_timeout {
+                    info!("Idle period has expired, shutting down Minecraft");
+                    try_stop_server(&mut mc_server, &mut rcon_client).await;
+                    break;
+                }
+            },
+            Err(e) => {
+                error!("Forcing server shutdown because a status query failed: {e:?}");
+                try_stop_server(&mut mc_server, &mut rcon_client).await;
+                break;
+            },
+        }
+    }
+}
+
+/// Describes the ways in which starting Minecraft can fail
 #[derive(Error, Debug)]
 enum StartServerError {
     #[error("Unable to spawn Minecraft as a child process")]
@@ -101,22 +129,19 @@ enum StartServerError {
     RconAuth,
 }
 
-async fn start_server() -> Result<(Child, RconClient), StartServerError> {
+/// Spawn the Minecraft instance and connect with RCON
+async fn start_server(settings: &Env) -> Result<(Child, RconClient), StartServerError> {
     
     use StartServerError::*;
 
-    let server_path = std::env::var("SERVER_PATH").unwrap(); //
-    let run_command = std::env::var("RUN_COMMAND").unwrap(); // nice
-    let rcon_pass = std::env::var("RCON_PASSWORD").unwrap(); //
-
-    let rcon_port: u16 = std::env::var("RCON_PORT").unwrap().parse().unwrap(); // yuck
-
-
-    let path = Path::new(&server_path).join(run_command);
+    let path = Path::new(&settings.server_path).join(&settings.run_command);
 
     // Attempt to execute "run.sh" on the server located at SERVER_PATH
-    let Ok(mut child) = std::process::Command::new(&path).current_dir(&server_path).spawn() else {
-        println!("Could not execute run.sh. Does the server have one?");
+    let Ok(mut child) = std::process::Command::new(&path)
+        .current_dir(&settings.server_path)
+        .spawn() else {
+
+        error!("Could not execute run.sh. Does the server have one?");
 
         return Err(ProcessStart);
     };
@@ -124,21 +149,21 @@ async fn start_server() -> Result<(Child, RconClient), StartServerError> {
     // Attempt to get an RCON handle on the server
     let Ok(mut rcon_client) = attempt(
         attempt::Method::Timeout(Duration::from_secs(10)),
-        || RconClient::new("localhost", rcon_port)
+        || RconClient::new("localhost", settings.rcon_port)
     ).await else {
-        println!("Killing the Minecraft server: could not start RCON!");
+        error!("Killing the Minecraft server: could not start RCON!");
         if child.kill().is_err() {
-            println!("Minecraft server was already dead.");
+            warn!("Minecraft server was already dead.");
         }
         
         return Err(RconConnect);
     };
 
     // Attempt to authenticate the RCON client
-    if rcon_client.authenticate(&rcon_pass).await.is_err() {
-        println!("Killing the Minecraft server: couldn't authenticate RCON!");
+    if rcon_client.authenticate(&settings.rcon_password).await.is_err() {
+        error!("Killing the Minecraft server: could not authenticate RCON!");
         if child.kill().is_err() {
-            println!("Minecraft server was already dead.");
+            warn!("Minecraft server was already dead.");
         }
 
         return Err(RconAuth);
@@ -147,6 +172,7 @@ async fn start_server() -> Result<(Child, RconClient), StartServerError> {
     Ok((child, rcon_client))
 }
 
+/// Describes the ways in which stopping Minecraft can fail
 #[derive(Error, Debug)]
 enum StopServerError {
     #[error("Unable to kill the Minecraft process (it's probably already dead)")]
@@ -156,6 +182,8 @@ enum StopServerError {
 async fn stop_server(mc_server: &mut Child, rcon: &mut RconClient) -> Result<(), StopServerError> {
     
     use StopServerError::*;
+
+    info!("Stopping server");
     
     // Try gracefully shutting down the server with rcon
     if rcon.run_command("stop").await.is_err() {
@@ -168,13 +196,6 @@ async fn stop_server(mc_server: &mut Child, rcon: &mut RconClient) -> Result<(),
 
 async fn try_stop_server(mc_server: &mut Child, rcon_client: &mut RconClient) {
     if let Err(e) = stop_server(mc_server, rcon_client).await {
-        println!("There was a problem shutting down Minecraft: {e}");
+        error!("There was a problem shutting down Minecraft: {e}");
     }
-}
-
-async fn query_server() -> std::io::Result<StatusResponse> {
-
-    let port = std::env::var("MINECRAFT_PORT").unwrap().parse().unwrap();
-
-    mc_query::status("localhost", port).await
 }
