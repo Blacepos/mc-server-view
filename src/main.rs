@@ -17,9 +17,6 @@ mod env;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().expect(".env file should exist");
     let settings = env::load_env()?;
-    
-    // rocket::log::private::set_max_level(rocket::log::LogLevel::Debug);
-    // env_logger::init();
 
     let (tx, rx) = rocket::tokio::sync::mpsc::channel::<ControlCmd>(5);
 
@@ -35,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = rocket::build()
         .configure(Config {
             address: Ipv4Addr::LOCALHOST.into(),
-            port: 8080,
+            port: settings.webserver_port,
             log_level: rocket::log::LogLevel::Debug,
             ..Default::default()
         })
