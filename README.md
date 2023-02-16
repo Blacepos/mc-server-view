@@ -1,9 +1,14 @@
 # MC Server View
 
-A basic Minecraft server wrapper
+A web interface for managing a Minecraft server
 
 # Installation
-I will assume you know how to run a Minecraft server (and have the appropriate Java runtime installed)
+I will assume you know how to run a Minecraft server (and have the appropriate Java runtime installed).
+
+## Overview
+Using this application at this period of development is currently a little more involved than the planned release:
+- No binaries are available, so you must build from source.
+- Minecraft servers are downloaded, organized, and configured manually.
 
 ## Build the application with the Rust toolchain
 1. https://www.rust-lang.org/tools/install
@@ -31,6 +36,4 @@ Note before you begin: you only need to forward 2 ports (80 and 25565) even thou
     - enable-rcon=true
 	- rcon.password=\<some password\>
 	- rcon.port=\<some unused port\>
-	- ~~enable-query=true~~
-	- ~~query.port=\<some unused port\>~~
 6. Set corresponding values in .env to be the same as in server.properties
