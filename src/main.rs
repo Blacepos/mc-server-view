@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .manage(settings)
         .manage(tx) // Webserver can send messages to control thread
-        .mount("/api", routes![api::query, api::address, api::start])
+        .mount("/api", routes![api::query, api::address, api::start, api::start_get])
         .mount("/", routes![navigation::index])
         .launch()
         .await?;

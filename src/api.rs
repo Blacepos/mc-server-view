@@ -19,3 +19,8 @@ pub async fn start(control: &State<Sender<ControlCmd>>) -> &'static str {
         Err(_) => "Unable to communicate with control thread...",
     }
 }
+
+#[get("/start")]
+pub async fn start_get() -> &'static str {
+    "Use a POST request to start the server"
+}
