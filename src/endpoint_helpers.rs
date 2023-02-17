@@ -17,21 +17,13 @@ pub async fn await_events(events: &mut Receiver<ControlEvent>) -> Option<Event> 
     };
     Some(match evt {
         Started => Event::empty().event("minecraft_online"),
+        Starting => Event::empty().event("minecraft_starting"),
         Stopped => Event::empty().event("minecraft_offline"),
+        Crashed => Event::empty().event("minecraft_crashed"),
         Empty => Event::empty().event("minecraft_empty"),
         Occupied => Event::empty().event("minecraft_occupied"),
     })
 }
-
-// async fn check_server_online(control: &State<Sender<ControlCmd>>) -> bool {
-    
-//     use QueryResult::*;
-    
-//     match query_server(control).await {
-//         Success { status: _ } => true,
-//         Failure { message: _ } => false
-//     }
-// }
 
 /// Ask the control thread to query Minecraft
 pub async fn query_server(control: &State<Sender<ControlCmd>>) -> QueryResult {

@@ -24,7 +24,9 @@ pub enum ControlCmd {
 #[allow(dead_code)]
 pub enum ControlEvent {
     Started,
+    Starting,
     Stopped,
+    Crashed,
     Empty,
     Occupied
 }
@@ -35,7 +37,7 @@ pub async fn control(mut msg: mpsc::Receiver<ControlCmd>, mut evt: broadcast::Se
 
     loop {
         // Thread idle (mc server offline)
-        let (mc_server, rcon_client) = thread_idle(&mut msg, &settings).await;
+        let (mc_server, rcon_client) = thread_idle(&mut msg, &mut evt, &settings).await;
 
         if evt.send(Started).is_err() {
             error!("Webserver dropped receiver while Minecraft was starting");
@@ -52,21 +54,29 @@ pub async fn control(mut msg: mpsc::Receiver<ControlCmd>, mut evt: broadcast::Se
 
 /// Patiently wait for commands from the webserver. Upon being told to start Minecraft, spawns the 
 /// process and returns a process handle and RCON client.
-async fn thread_idle(msg: &mut mpsc::Receiver<ControlCmd>, settings: &Env) -> (Child, RconClient) {
+async fn thread_idle(
+    msg: &mut mpsc::Receiver<ControlCmd>,
+    evt: &mut broadcast::Sender<ControlEvent>,
+    settings: &Env
+) -> (Child, RconClient) {
     
     use ControlCmd::*;
+    use ControlEvent::*;
 
     loop {
         match msg.recv().await {
             Some(StartServer) => {
+                // send a messsage to the end-users listening on /events
+                evt.send(Starting);
+                
                 if let Ok((mc, rc)) = start_server(settings).await {
                     break (mc, rc);
                 }
             },
-            Some(Query(_)) => info!("Received a query, but the server wasn't online"),
             // Note: if Query is sent, tx will be immediately dropped, so rx won't block the webserver
+            Some(Query(_)) => info!("Received a query, but the server wasn't online"),
             Some(other) => warn!("Webserver sent a message other than \"StartServer\": {other:?}"),
-            None => warn!("Error while awaiting web server message"),
+            None => error!("Webserver dropped sender"),
         }
     }
 }
@@ -108,8 +118,15 @@ async fn thread_active(
                     error!("Webserver did not get the status (receiver hung up)");
                 }
             },
-            Ok(Some(_)) => {},
-            Ok(None) => {},
+            Ok(Some(other)) => warn!("Webserver sent an invalid message: {other:?}"),
+            Ok(None) => {
+                error!("Webserver dropped sender while Minecraft was online, forcing Minecraft to close");
+
+                try_stop_server(&mut mc_server, &mut rcon_client).await;
+
+                // send a messsage to the end-users listening on /events
+                evt.send(Crashed);
+            },
             Err(_) => {}, // No messages
         }
 
@@ -120,6 +137,7 @@ async fn thread_active(
             Ok(status) => {
                 debug!("Queried Minecraft, got status {status:?}");
                 
+
                 // reset the idle timer if there are players online
                 if status.players.online > 0 {
                     idle_begin = Instant::now();
@@ -139,6 +157,7 @@ async fn thread_active(
                     }
                 }
 
+
                 // Stop the server if it has been idle for too long
                 if Instant::now() - idle_begin > idle_timeout {
                     info!("Idle period has expired, shutting down Minecraft");
@@ -147,8 +166,16 @@ async fn thread_active(
                 }
             },
             Err(e) => {
-                error!("Forcing server shutdown because a status query failed: {e:?}");
+                // If we can't get the status of the server, then it's either already dead or
+                // some unknown circumstance is causing it to run unsupervised.
+                // Either way, we can't pretend like the server is in a valid state, so we must make
+                // sure it is dead and then go back to idle.
+                warn!("Forcing server shutdown because a status query failed: {e:?}");
                 try_stop_server(&mut mc_server, &mut rcon_client).await;
+
+                // send a messsage to the end-users listening on /events
+                evt.send(Crashed);
+                
                 break;
             },
         }
