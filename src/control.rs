@@ -40,14 +40,14 @@ pub async fn control(mut msg: mpsc::Receiver<ControlCmd>, mut evt: broadcast::Se
         let (mc_server, rcon_client) = thread_idle(&mut msg, &mut evt, &settings).await;
 
         if evt.send(Started).is_err() {
-            error!("Webserver dropped receiver while Minecraft was starting");
+            info!("Webserver not currently listening to events");
         }
 
         // Thread active (mc server online)
         thread_active(&mut msg, &mut evt, &settings, mc_server, rcon_client).await;
 
         if evt.send(Stopped).is_err() {
-            error!("Webserver dropped receiver while Minecraft was stopping");
+            info!("Webserver not currently listening to events");
         }
     }
 }
@@ -68,7 +68,7 @@ async fn thread_idle(
             Some(StartServer) => {
                 // send a messsage to the end-users listening on /events
                 if evt.send(Starting).is_err() {
-                    error!("Webserver dropped receiver while Minecraft was online");
+                    info!("Webserver not currently listening to events");
                 }
                 
                 if let Ok((mc, rc)) = start_server(settings).await {
@@ -128,7 +128,7 @@ async fn thread_active(
 
                 // send a messsage to the end-users listening on /events
                 if evt.send(Crashed).is_err() {
-                    error!("Webserver dropped receiver");
+                    info!("Webserver not currently listening to events");
                 }
                 break;
             },
@@ -151,14 +151,14 @@ async fn thread_active(
                     if !is_empty {
                         is_empty = true;
                         if evt.send(Occupied).is_err() {
-                            error!("Webserver dropped receiver while Minecraft was online");
+                            info!("Webserver not currently listening to events");
                         }
                     }
                 // emit event if server was previously empty
                 } else if is_empty {
                     is_empty = false;
                     if evt.send(Empty).is_err() {
-                        error!("Webserver dropped receiver while Minecraft was online");
+                        info!("Webserver not currently listening to events");
                     }
                 }
 
@@ -180,7 +180,7 @@ async fn thread_active(
 
                 // send a messsage to the end-users listening on /events
                 if evt.send(Crashed).is_err() {
-                    error!("Webserver dropped receiver while Minecraft was online");
+                    info!("Webserver not currently listening to events");
                 }
                 
                 break;
