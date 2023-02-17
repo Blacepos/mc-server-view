@@ -4,7 +4,7 @@ use std::{process::Child, time::Instant};
 use std::time::Duration;
 use std::path::Path;
 use mc_query::{rcon::RconClient, status::StatusResponse};
-use rocket::tokio::{sync::{mpsc, oneshot}, time::timeout};
+use rocket::tokio::{sync::{mpsc, oneshot, broadcast}, time::timeout};
 use thiserror::Error;
 
 use crate::attempt::{self, attempt};
@@ -20,7 +20,7 @@ pub enum ControlCmd {
     Query(oneshot::Sender<Option<StatusResponse>>) // I love this.
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum ControlEvent {
     Started,
@@ -29,7 +29,7 @@ pub enum ControlEvent {
     Occupied
 }
 
-pub async fn control(mut msg: mpsc::Receiver<ControlCmd>, mut evt: mpsc::UnboundedSender<ControlEvent>, settings: Env) {
+pub async fn control(mut msg: mpsc::Receiver<ControlCmd>, mut evt: broadcast::Sender<ControlEvent>, settings: Env) {
 
     use ControlEvent::*;
 
@@ -79,7 +79,7 @@ async fn thread_idle(msg: &mut mpsc::Receiver<ControlCmd>, settings: &Env) -> (C
 /// - A single ping fails for whatever reason
 async fn thread_active(
     msg: &mut mpsc::Receiver<ControlCmd>,
-    evt: &mut mpsc::UnboundedSender<ControlEvent>,
+    evt: &mut broadcast::Sender<ControlEvent>,
     settings: &Env,
     mut mc_server: Child,
     mut rcon_client: RconClient

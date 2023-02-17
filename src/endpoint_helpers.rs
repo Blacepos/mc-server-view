@@ -2,27 +2,36 @@ use std::time::Duration;
 
 use mc_query::status::StatusResponse;
 use rocket::response::stream::Event;
-use rocket::tokio::{time::timeout, sync::mpsc::Sender};
+use rocket::tokio::{sync::{broadcast::Receiver, mpsc::Sender}, time::timeout};
 use rocket::serde::Serialize;
 use rocket::State;
 
-use crate::control::ControlCmd;
+use crate::control::{ControlCmd, ControlEvent};
 
-pub async fn poll_server_events(control: &State<Sender<ControlCmd>>) -> Option<Event> {
-    use ServerEvent::*;
-    let event = if check_server_online(control).await { MinecraftOnline } else { MinecraftOffline };
-    Some(event.into_sse())
+/// Listens on the control thread's broadcast channel and converts messages to SSE events
+pub async fn await_events(events: &mut Receiver<ControlEvent>) -> Option<Event> {
+    use ControlEvent::*;
+    let Ok(evt) = events.recv().await else {
+        error!("Control thread seems to have dropped its sender");
+        return None;
+    };
+    Some(match evt {
+        Started => Event::empty().event("minecraft_online"),
+        Stopped => Event::empty().event("minecraft_offline"),
+        Empty => Event::empty().event("minecraft_empty"),
+        Occupied => Event::empty().event("minecraft_occupied"),
+    })
 }
 
-async fn check_server_online(control: &State<Sender<ControlCmd>>) -> bool {
+// async fn check_server_online(control: &State<Sender<ControlCmd>>) -> bool {
     
-    use QueryResult::*;
+//     use QueryResult::*;
     
-    match query_server(control).await {
-        Success { status: _ } => true,
-        Failure { message: _ } => false
-    }
-}
+//     match query_server(control).await {
+//         Success { status: _ } => true,
+//         Failure { message: _ } => false
+//     }
+// }
 
 /// Ask the control thread to query Minecraft
 pub async fn query_server(control: &State<Sender<ControlCmd>>) -> QueryResult {
@@ -57,23 +66,5 @@ pub enum QueryResult {
     },
     Failure {
         message: &'static str
-    }
-}
-
-/// Defines the different message types that the webserver can send over /events
-enum ServerEvent {
-    MinecraftOnline,
-    MinecraftOffline,
-}
-
-impl ServerEvent {
-    fn into_sse(self) -> Event {
-        let name = match self {
-            ServerEvent::MinecraftOnline => "minecraft_online",
-            ServerEvent::MinecraftOffline => "minecraft_offline",
-        };
-
-        // This may change if some events carry data
-        Event::empty().event(name)
     }
 }

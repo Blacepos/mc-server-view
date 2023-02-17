@@ -3,7 +3,7 @@
 use std::net::Ipv4Addr;
 
 use dotenvy::dotenv;
-use rocket::{Config, fairing::{Fairing, Kind, Info}, Request, http::Header, Response};
+use rocket::{Config, fairing::{Fairing, Kind, Info}, Request, http::Header, Response, tokio::sync};
 
 mod control;
 mod attempt;
@@ -17,10 +17,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().expect(".env file should exist");
     let settings = env::load_env()?;
 
-    let (cmd_tx, cmd_rx) = rocket::tokio::sync::mpsc::channel(5);
-    let (ev_tx, ev_rx) = rocket::tokio::sync::mpsc::unbounded_channel();
-
+    let (cmd_tx, cmd_rx) = sync::mpsc::channel(5);
+    let (ev_tx, _) = sync::broadcast::channel(5);
+    // should   ^this receiver be dropped?
     let s = settings.clone();
+    let evt_sub = ev_tx.clone();
     // Start the server control thread
     rocket::tokio::spawn(async move {
         control::control(cmd_rx, ev_tx, s).await;
@@ -38,9 +39,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .manage(settings)
         .manage(cmd_tx) // Webserver can send messages to control thread
-        .manage(ev_rx) // /events can await signals from control thread
+        .manage(evt_sub) // /events can await signals from control thread. This is broadcast, so tx is needed to make new subscribers
         .attach(Cors)
-        .mount("/api", routes![api::query, api::address, api::start, api::start_get])
+        .mount("/api", routes![api::query, api::address, api::start, api::start_get, api::events])
         .mount("/", routes![navigation::index])
         .launch()
         .await?;
