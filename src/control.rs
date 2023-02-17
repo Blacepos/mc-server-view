@@ -67,7 +67,9 @@ async fn thread_idle(
         match msg.recv().await {
             Some(StartServer) => {
                 // send a messsage to the end-users listening on /events
-                evt.send(Starting);
+                if evt.send(Starting).is_err() {
+                    error!("Webserver dropped receiver while Minecraft was online");
+                }
                 
                 if let Ok((mc, rc)) = start_server(settings).await {
                     break (mc, rc);
@@ -125,7 +127,10 @@ async fn thread_active(
                 try_stop_server(&mut mc_server, &mut rcon_client).await;
 
                 // send a messsage to the end-users listening on /events
-                evt.send(Crashed);
+                if evt.send(Crashed).is_err() {
+                    error!("Webserver dropped receiver");
+                }
+                break;
             },
             Err(_) => {}, // No messages
         }
@@ -174,7 +179,9 @@ async fn thread_active(
                 try_stop_server(&mut mc_server, &mut rcon_client).await;
 
                 // send a messsage to the end-users listening on /events
-                evt.send(Crashed);
+                if evt.send(Crashed).is_err() {
+                    error!("Webserver dropped receiver while Minecraft was online");
+                }
                 
                 break;
             },
