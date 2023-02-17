@@ -27,11 +27,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     info!("Control thread started");
-
-    let cors = rocket_cors::CorsOptions::default()
-        .allowed_origins(rocket_cors::AllowedOrigins::All);
-
-    cors.validate()?;
     
     // Start the web server
     let _ = rocket::build()
