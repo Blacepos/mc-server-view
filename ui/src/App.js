@@ -7,7 +7,10 @@ function App() {
   const { isLoading, data, error } = useFetch("http://192.168.1.249:3000/api/query", {
     formatter: (response) => response.json()
   });
-
+  
+  const startServer = async () => {
+    await fetch("http://192.168.1.249:3000/api/start", { method: "POST" });
+  };
 
   let content = (error
     ? <p>Unable to contact server: "{error.name}: {error.message}"</p>
@@ -17,12 +20,11 @@ function App() {
       )
     );
 
-
-
   return (
     <main>
       <h1>Minecraft Server Viewer</h1>
       {content}
+      <button onClick={startServer}>Start Minecraft!</button>
     </main>
   );
 }

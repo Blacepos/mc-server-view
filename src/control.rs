@@ -20,13 +20,33 @@ pub enum ControlCmd {
     Query(oneshot::Sender<Option<StatusResponse>>) // I love this.
 }
 
-pub async fn control(mut msg: mpsc::Receiver<ControlCmd>, settings: Env) {
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum ControlEvent {
+    Started,
+    Stopped,
+    Empty,
+    Occupied
+}
+
+pub async fn control(mut msg: mpsc::Receiver<ControlCmd>, mut evt: mpsc::UnboundedSender<ControlEvent>, settings: Env) {
+
+    use ControlEvent::*;
+
     loop {
         // Thread idle (mc server offline)
         let (mc_server, rcon_client) = thread_idle(&mut msg, &settings).await;
 
+        if evt.send(Started).is_err() {
+            error!("Webserver dropped receiver while Minecraft was starting");
+        }
+
         // Thread active (mc server online)
-        thread_active(&mut msg, &settings, mc_server, rcon_client).await;
+        thread_active(&mut msg, &mut evt, &settings, mc_server, rcon_client).await;
+
+        if evt.send(Stopped).is_err() {
+            error!("Webserver dropped receiver while Minecraft was stopping");
+        }
     }
 }
 
@@ -59,15 +79,18 @@ async fn thread_idle(msg: &mut mpsc::Receiver<ControlCmd>, settings: &Env) -> (C
 /// - A single ping fails for whatever reason
 async fn thread_active(
     msg: &mut mpsc::Receiver<ControlCmd>,
+    evt: &mut mpsc::UnboundedSender<ControlEvent>,
     settings: &Env,
     mut mc_server: Child,
     mut rcon_client: RconClient
 ) {
     
     use ControlCmd::*;
+    use ControlEvent::*;
 
     let idle_timeout = Duration::from_secs(settings.minecraft_idle_timeout);
     let mut idle_begin = Instant::now();
+    let mut is_empty = true;
     
     loop {
         // Check for messages from the webserver
@@ -82,7 +105,7 @@ async fn thread_active(
                     .ok();
 
                 if webserver_tx.send(response).is_err() {
-                    warn!("Webserver did not get the status (receiver hung up)");
+                    error!("Webserver did not get the status (receiver hung up)");
                 }
             },
             Ok(Some(_)) => {},
@@ -100,6 +123,20 @@ async fn thread_active(
                 // reset the idle timer if there are players online
                 if status.players.online > 0 {
                     idle_begin = Instant::now();
+
+                    // emit event if server was previously not empty
+                    if !is_empty {
+                        is_empty = true;
+                        if evt.send(Occupied).is_err() {
+                            error!("Webserver dropped receiver while Minecraft was online");
+                        }
+                    }
+                // emit event if server was previously empty
+                } else if is_empty {
+                    is_empty = false;
+                    if evt.send(Empty).is_err() {
+                        error!("Webserver dropped receiver while Minecraft was online");
+                    }
                 }
 
                 // Stop the server if it has been idle for too long

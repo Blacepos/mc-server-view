@@ -2,7 +2,6 @@
 
 use std::net::Ipv4Addr;
 
-use control::ControlCmd;
 use dotenvy::dotenv;
 use rocket::{Config, fairing::{Fairing, Kind, Info}, Request, http::Header, Response};
 
@@ -18,12 +17,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().expect(".env file should exist");
     let settings = env::load_env()?;
 
-    let (tx, rx) = rocket::tokio::sync::mpsc::channel::<ControlCmd>(5);
+    let (cmd_tx, cmd_rx) = rocket::tokio::sync::mpsc::channel(5);
+    let (ev_tx, ev_rx) = rocket::tokio::sync::mpsc::unbounded_channel();
 
     let s = settings.clone();
     // Start the server control thread
     rocket::tokio::spawn(async move {
-        control::control(rx, s).await;
+        control::control(cmd_rx, ev_tx, s).await;
     });
 
     info!("Control thread started");
@@ -33,11 +33,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .configure(Config {
             address: Ipv4Addr::UNSPECIFIED.into(),
             port: settings.webserver_port,
-            log_level: rocket::log::LogLevel::Debug,
+            log_level: rocket::log::LogLevel::Normal,
             ..Default::default()
         })
         .manage(settings)
-        .manage(tx) // Webserver can send messages to control thread
+        .manage(cmd_tx) // Webserver can send messages to control thread
+        .manage(ev_rx) // /events can await signals from control thread
         .attach(Cors)
         .mount("/api", routes![api::query, api::address, api::start, api::start_get])
         .mount("/", routes![navigation::index])
