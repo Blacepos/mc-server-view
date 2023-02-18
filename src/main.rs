@@ -3,7 +3,7 @@
 use std::net::Ipv4Addr;
 
 use dotenvy::dotenv;
-use rocket::{Config, fairing::{Fairing, Kind, Info}, Request, http::Header, Response, tokio::sync::{self, RwLock}};
+use rocket::{Config, fairing::{Fairing, Kind, Info}, Request, http::Header, Response, tokio::sync};
 
 mod control;
 mod attempt;

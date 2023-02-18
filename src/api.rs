@@ -1,18 +1,19 @@
 
+use mc_query::status::StatusResponse;
 use rocket::Shutdown;
 use rocket::tokio::select;
 use rocket::tokio::sync::broadcast;
 use rocket::State;
 use rocket::serde::json::Json;
 use rocket::tokio::sync::mpsc::Sender;
-use rocket::tokio::time::Duration;
 use rocket::response::stream::{Event, EventStream};
 
 use crate::control::{ControlEvent, ControlCmd};
-use crate::{endpoint_helpers::{query_server, QueryResult, await_events}};
+use crate::endpoint_helpers::get_last_event;
+use crate::{endpoint_helpers::{query_server, await_events}};
 
 #[get("/query")]
-pub async fn query(control: &State<Sender<ControlCmd>>) -> Json<QueryResult> {
+pub async fn query(control: &State<Sender<ControlCmd>>) -> Json<Option<StatusResponse>> {
     Json(query_server(control).await)
 }
 
@@ -40,7 +41,6 @@ pub async fn events(
     mut shutdown: Shutdown
 ) -> EventStream![Event + '_] {
     
-    const HEARTBEAT_INTERVAL_SEC: Duration = Duration::from_secs(1);
     let mut events = event_sub.subscribe();
     
     EventStream! {
@@ -62,6 +62,6 @@ pub async fn events(
 }
 
 #[get("/last-event")]
-pub async fn last_event(control: &State<Sender<ControlCmd>>) -> String {
-    
+pub async fn last_event(control: &State<Sender<ControlCmd>>) -> Json<Option<String>> {
+    Json(get_last_event(control).await.map(|s| s.to_event_name()))
 }

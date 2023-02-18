@@ -3,13 +3,13 @@
 function QueryData(data) {
 
 	console.log(data);
-	if (data.Success) {
+	if (data.status) {
 		return (
 			<>
 				<h2>Server is online</h2>
 				<ul>
-					<li>MOTD: {data.Success.status.description.text}</li>
-					<li>Players online: {data.Success.status.players.online}</li>
+					<li>MOTD: {data.status.description.text}</li>
+					<li>Players online: {data.status.players.online}</li>
 				</ul>
 			</>
 		);
@@ -17,9 +17,6 @@ function QueryData(data) {
 		return (
 			<>
 				<h2>Server appears to be offline</h2>
-				<p>
-					{data.Failure.message}
-				</p>
 			</>
 		);
 	}
