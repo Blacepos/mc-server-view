@@ -9,24 +9,13 @@ use crate::control::{ControlCmd, ControlEvent};
 
 /// Listens on the control thread's broadcast channel and converts messages to SSE events
 pub async fn await_events(events: &mut broadcast::Receiver<ControlEvent>) -> Option<Event> {
-    
-    use ControlEvent::*;
-    
+        
     let Ok(evt) = events.recv().await else {
         error!("Control thread seems to have dropped its sender");
         return None;
     };
-    
-    let evt = match evt {
-        Stopped  => "offline",
-        Starting => "starting",
-        Started  => "online",
-        Empty    => "empty",
-        Occupied => "occupied",
-        Crashed  => "crashed",
-    };
 
-    Some(Event::empty().event(evt))
+    Some(Event::empty().event(evt.to_event_name()))
 }
 
 /// Ask the control thread to query Minecraft
@@ -60,13 +49,16 @@ pub async fn get_last_event(control: &State<mpsc::Sender<ControlCmd>>) -> Option
 
 impl ControlEvent {
     pub fn to_event_name(&self) -> String {
+
+        use ControlEvent::*;
+
         String::from(match self {
-            ControlEvent::Started => "started",
-            ControlEvent::Starting => "starting",
-            ControlEvent::Stopped => "stopped",
-            ControlEvent::Crashed => "crashed",
-            ControlEvent::Empty => "empty",
-            ControlEvent::Occupied => "occupied",
+            Started => "online",
+            Starting => "starting",
+            Stopped => "offline",
+            Crashed => "crashed",
+            Empty => "empty",
+            Occupied => "occupied",
         })
     }
 }
