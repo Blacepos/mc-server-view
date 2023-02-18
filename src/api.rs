@@ -1,10 +1,11 @@
 
 use mc_query::status::StatusResponse;
 use rocket::Shutdown;
+use rocket::serde::json::serde_json::json;
 use rocket::tokio::select;
 use rocket::tokio::sync::broadcast;
 use rocket::State;
-use rocket::serde::json::Json;
+use rocket::serde::json::{Json, self};
 use rocket::tokio::sync::mpsc::Sender;
 use rocket::response::stream::{Event, EventStream};
 
@@ -62,6 +63,10 @@ pub async fn events(
 }
 
 #[get("/last-event")]
-pub async fn last_event(control: &State<Sender<ControlCmd>>) -> Json<Option<String>> {
-    Json(get_last_event(control).await.map(|s| s.to_event_name()))
+pub async fn last_event(control: &State<Sender<ControlCmd>>) -> json::Value {
+    let event = get_last_event(control).await.map(|s| s.to_event_name());
+    let response = json!({
+        "last_event": event
+    });
+    response
 }

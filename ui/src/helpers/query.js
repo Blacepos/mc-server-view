@@ -10,9 +10,9 @@ function getLastEvent(setStatus, setError, setLoading) {
       throw res;
     })
     .then(res_json => {
-      if (res_json) {
+      if (res_json.last_event) {
         console.log("Parsed json in getLastEvent: ", res_json)
-        setStatus(res_json);
+        setStatus(res_json.last_event);
       } else {
         throw "Server failed to return last event"
       }

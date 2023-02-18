@@ -7,10 +7,11 @@ function QueryData(data) {
 		return (
 			<>
 				<h2>Server is online</h2>
-				<ul>
+        <i>most recent event: {data}</i>
+				{/* <ul>
 					<li>MOTD: {data.description.text}</li>
 					<li>Players online: {data.players.online}</li>
-				</ul>
+				</ul> */}
 			</>
 		);
 	} else {
