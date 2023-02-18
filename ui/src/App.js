@@ -43,7 +43,10 @@ function App() {
     ? <p>Unable to contact server: "{mc_last_event_err}"</p>
     : (init_loading
       ? <h2>Querying server...</h2>
-      : <QueryData {...mc_last_event}></QueryData>
+      : <>
+          <p>most recent event: <i>{mc_last_event}</i></p>
+          <QueryData></QueryData>
+        </>
     ));
 
   return (

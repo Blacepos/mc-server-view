@@ -1,13 +1,11 @@
 
 
-function QueryData(data) {
+function QueryData() {
 
-	console.log(data);
-	if (data) {
+	if (true) {
 		return (
 			<>
 				<h2>Server is online</h2>
-        <i>most recent event: {data}</i>
 				{/* <ul>
 					<li>MOTD: {data.description.text}</li>
 					<li>Players online: {data.players.online}</li>
