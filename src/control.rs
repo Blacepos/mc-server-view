@@ -73,9 +73,14 @@ async fn thread_idle(
                     break (mc, rc);
                 }
             },
+            Some(LastEvent(webserver_tx)) => {
+                if webserver_tx.send(last_event.clone()).is_err() {
+                    error!("Webserver did not get the status (receiver hung up)");
+                }
+            },
             // Note: if Query is sent, tx will be immediately dropped, so rx won't block the webserver
             Some(Query(_)) => info!("Received a query, but the server wasn't online"),
-            Some(other) => warn!("Webserver sent a message other than \"StartServer\": {other:?}"),
+            Some(other) => warn!("Webserver sent an invalid message: {other:?}"),
             None => error!("Webserver dropped sender"),
         }
     }
@@ -116,6 +121,11 @@ async fn thread_active(
                     .ok();
 
                 if webserver_tx.send(response).is_err() {
+                    error!("Webserver did not get the status (receiver hung up)");
+                }
+            },
+            Ok(Some(LastEvent(webserver_tx))) => {
+                if webserver_tx.send(last_event.clone()).is_err() {
                     error!("Webserver did not get the status (receiver hung up)");
                 }
             },

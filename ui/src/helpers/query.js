@@ -1,41 +1,29 @@
 
 
-function getMcStatus(setStatus, setError, setLoading) {
-	fetch("http://192.168.1.249:3000/api/online")
-      .then(res => {
-        if (res.ok) {
-          return res.json();
-        }
-        throw response;
-      })
-      .then(res_json => {
+function getLastEvent(setStatus, setError, setLoading) {
+	setLoading(true);
+  fetch("http://192.168.1.249:3000/api/last-event")
+    .then(res => {
+      if (res.ok) {
+        return res.json();
+      }
+      throw res;
+    })
+    .then(res_json => {
+      if (res_json) {
+        console.log("Parsed json in getLastEvent: ", res_json)
         setStatus(res_json);
-      })
+      } else {
+        throw "Server failed to return last event"
+      }
+    })
 	  .catch(err => {
-		console.log("Failed to make a fetch: ", error)
-		setError(err);
+      console.log("Failed to make a fetch: ", err)
+      setError(err);
 	  })
 	  .finally(() => {
-		setLoading(false)
-	  });
+		  setLoading(false)
+    });
 }
 
-export default getMcStatus;
-
-/*
-enum Status {
-    Offline,
-    Starting,
-    Online(Idle),
-}
-
-enum Idle {
-    Idle,
-    Occupied
-}
-
-struct Status2 {
-    state: String,
-    idle: String,
-}
-*/
+export default getLastEvent;
