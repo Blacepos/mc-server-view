@@ -17,7 +17,8 @@ const IDLE_QUERY_PERIOD_SEC: u64 = 30;
 pub enum ControlCmd {
     StartServer,
     StopServer,
-    Query(oneshot::Sender<Option<StatusResponse>>) // I love this.
+    Query(oneshot::Sender<Option<StatusResponse>>), // I love this.
+    LastEvent(oneshot::Sender<ControlEvent>)
 }
 
 #[derive(Debug, Clone)]
@@ -31,24 +32,22 @@ pub enum ControlEvent {
     Occupied
 }
 
-pub async fn control(mut msg: mpsc::Receiver<ControlCmd>, mut evt: broadcast::Sender<ControlEvent>, settings: Env) {
+pub async fn control(mut msg: mpsc::Receiver<ControlCmd>, mut evt_sender: broadcast::Sender<ControlEvent>, settings: Env) {
 
     use ControlEvent::*;
 
+    let mut last_event = Stopped;
+
     loop {
         // Thread idle (mc server offline)
-        let (mc_server, rcon_client) = thread_idle(&mut msg, &mut evt, &settings).await;
+        let (mc_server, rcon_client) = thread_idle(&mut msg, &mut evt_sender, &mut last_event, &settings).await;
 
-        if evt.send(Started).is_err() {
-            info!("Webserver not currently listening to events");
-        }
+        emit_event(Started, &mut evt_sender, &mut last_event);
 
         // Thread active (mc server online)
-        thread_active(&mut msg, &mut evt, &settings, mc_server, rcon_client).await;
+        thread_active(&mut msg, &mut evt_sender, &mut last_event, &settings, mc_server, rcon_client).await;
 
-        if evt.send(Stopped).is_err() {
-            info!("Webserver not currently listening to events");
-        }
+        emit_event(Stopped, &mut evt_sender, &mut last_event);
     }
 }
 
@@ -56,7 +55,8 @@ pub async fn control(mut msg: mpsc::Receiver<ControlCmd>, mut evt: broadcast::Se
 /// process and returns a process handle and RCON client.
 async fn thread_idle(
     msg: &mut mpsc::Receiver<ControlCmd>,
-    evt: &mut broadcast::Sender<ControlEvent>,
+    evt_sender: &mut broadcast::Sender<ControlEvent>,
+    last_event: &mut ControlEvent,
     settings: &Env
 ) -> (Child, RconClient) {
     
@@ -67,9 +67,7 @@ async fn thread_idle(
         match msg.recv().await {
             Some(StartServer) => {
                 // send a messsage to the end-users listening on /events
-                if evt.send(Starting).is_err() {
-                    info!("Webserver not currently listening to events");
-                }
+                emit_event(Starting, evt_sender, last_event);
                 
                 if let Ok((mc, rc)) = start_server(settings).await {
                     break (mc, rc);
@@ -91,7 +89,8 @@ async fn thread_idle(
 /// - A single ping fails for whatever reason
 async fn thread_active(
     msg: &mut mpsc::Receiver<ControlCmd>,
-    evt: &mut broadcast::Sender<ControlEvent>,
+    evt_sender: &mut broadcast::Sender<ControlEvent>,
+    last_event: &mut ControlEvent,
     settings: &Env,
     mut mc_server: Child,
     mut rcon_client: RconClient
@@ -127,9 +126,7 @@ async fn thread_active(
                 try_stop_server(&mut mc_server, &mut rcon_client).await;
 
                 // send a messsage to the end-users listening on /events
-                if evt.send(Crashed).is_err() {
-                    info!("Webserver not currently listening to events");
-                }
+                emit_event(Crashed, evt_sender, last_event);
                 break;
             },
             Err(_) => {}, // No messages
@@ -150,16 +147,12 @@ async fn thread_active(
                     // emit event if server was previously not empty
                     if !is_empty {
                         is_empty = true;
-                        if evt.send(Occupied).is_err() {
-                            info!("Webserver not currently listening to events");
-                        }
+                        emit_event(Occupied, evt_sender, last_event);
                     }
                 // emit event if server was previously empty
                 } else if is_empty {
                     is_empty = false;
-                    if evt.send(Empty).is_err() {
-                        info!("Webserver not currently listening to events");
-                    }
+                    emit_event(Empty, evt_sender, last_event);
                 }
 
 
@@ -179,9 +172,7 @@ async fn thread_active(
                 try_stop_server(&mut mc_server, &mut rcon_client).await;
 
                 // send a messsage to the end-users listening on /events
-                if evt.send(Crashed).is_err() {
-                    info!("Webserver not currently listening to events");
-                }
+                emit_event(Crashed, evt_sender, last_event);
                 
                 break;
             },
@@ -268,5 +259,13 @@ async fn stop_server(mc_server: &mut Child, rcon: &mut RconClient) -> Result<(),
 async fn try_stop_server(mc_server: &mut Child, rcon_client: &mut RconClient) {
     if let Err(e) = stop_server(mc_server, rcon_client).await {
         error!("There was a problem shutting down Minecraft: {e}");
+    }
+}
+
+fn emit_event(event: ControlEvent, evt_sender: &mut broadcast::Sender<ControlEvent>, last_event: &mut ControlEvent) {
+    *last_event = event.clone();
+
+    if evt_sender.send(event).is_err() {
+        info!("Webserver not currently listening to events");
     }
 }

@@ -8,8 +8,8 @@ use rocket::tokio::sync::mpsc::Sender;
 use rocket::tokio::time::Duration;
 use rocket::response::stream::{Event, EventStream};
 
-use crate::control::ControlEvent;
-use crate::{control::ControlCmd, endpoint_helpers::{query_server, QueryResult, await_events}};
+use crate::control::{ControlEvent, ControlCmd};
+use crate::{endpoint_helpers::{query_server, QueryResult, await_events}};
 
 #[get("/query")]
 pub async fn query(control: &State<Sender<ControlCmd>>) -> Json<QueryResult> {
@@ -59,4 +59,9 @@ pub async fn events(
             
         }
     }
+}
+
+#[get("/last-event")]
+pub async fn last_event(control: &State<Sender<ControlCmd>>) -> String {
+    
 }

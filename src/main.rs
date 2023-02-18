@@ -3,7 +3,7 @@
 use std::net::Ipv4Addr;
 
 use dotenvy::dotenv;
-use rocket::{Config, fairing::{Fairing, Kind, Info}, Request, http::Header, Response, tokio::sync};
+use rocket::{Config, fairing::{Fairing, Kind, Info}, Request, http::Header, Response, tokio::sync::{self, RwLock}};
 
 mod control;
 mod attempt;
@@ -41,7 +41,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .manage(cmd_tx) // Webserver can send messages to control thread
         .manage(evt_sub) // /events can await signals from control thread. This is broadcast, so tx is needed to make new subscribers
         .attach(Cors)
-        .mount("/api", routes![api::query, api::address, api::start, api::start_get, api::events])
+        .mount("/api", routes![
+            api::query,
+            api::address,
+            api::start,
+            api::start_get,
+            api::events,
+            api::last_event
+        ])
         .mount("/", routes![navigation::index])
         .launch()
         .await?;
@@ -49,8 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-
-pub struct Cors;
+struct Cors;
 
 #[rocket::async_trait]
 impl Fairing for Cors {
