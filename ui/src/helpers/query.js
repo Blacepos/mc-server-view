@@ -2,7 +2,7 @@
 
 function getLastEvent(setStatus, setError, setLoading) {
 	setLoading(true);
-  fetch("http://192.168.1.249:3000/api/last-event")
+  fetch("http://162.232.250.170/api/last-event")
     .then(res => {
       if (res.ok) {
         return res.json();
@@ -10,10 +10,11 @@ function getLastEvent(setStatus, setError, setLoading) {
       throw res;
     })
     .then(res_json => {
-      if (res_json.last_event) {
-        console.log("Parsed json in getLastEvent: ", res_json)
+      if (res_json.ok) {
+        console.log("Parsed json in getLastEvent: ", res_json);
         setStatus(res_json.last_event);
       } else {
+        console.log("res_json.ok: ", res_json);
         throw "Server failed to return last event"
       }
     })

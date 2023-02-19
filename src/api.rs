@@ -1,11 +1,10 @@
 
-use mc_query::status::StatusResponse;
 use rocket::Shutdown;
 use rocket::serde::json::serde_json::json;
 use rocket::tokio::select;
 use rocket::tokio::sync::broadcast;
 use rocket::State;
-use rocket::serde::json::{Json, self};
+use rocket::serde::json;
 use rocket::tokio::sync::mpsc::Sender;
 use rocket::response::stream::{Event, EventStream};
 
@@ -14,8 +13,13 @@ use crate::endpoint_helpers::get_last_event;
 use crate::{endpoint_helpers::{query_server, await_events}};
 
 #[get("/query")]
-pub async fn query(control: &State<Sender<ControlCmd>>) -> Json<Option<StatusResponse>> {
-    Json(query_server(control).await)
+pub async fn query(control: &State<Sender<ControlCmd>>) -> json::Value {
+    let status = query_server(control).await;
+
+    json!({
+        "ok": status.is_some(),
+        "status": status
+    })
 }
 
 #[get("/address")]
@@ -65,8 +69,9 @@ pub async fn events(
 #[get("/last-event")]
 pub async fn last_event(control: &State<Sender<ControlCmd>>) -> json::Value {
     let event = get_last_event(control).await.map(|s| s.to_event_name());
-    let response = json!({
+    
+    json!({
+        "ok": event.is_some(),
         "last_event": event
-    });
-    response
+    })
 }

@@ -6,12 +6,12 @@ import QueryData from './components/QueryData';
 import getLastEvent from './helpers/query'
 
 function App() {
-  // const { isLoading, data, error } = useFetch("http://192.168.1.249:3000/api/query", {
+  // const { isLoading, data, error } = useFetch("http://162.232.250.170/api/query", {
   //   formatter: (response) => response.json()
   // });
   
   const startServer = async () => {
-    await fetch("http://192.168.1.249:3000/api/start", { method: "POST" });
+    await fetch("http://162.232.250.170/api/start", { method: "POST" });
   };
 
   const [mc_last_event, setMcLastEvent] = useState("offline");
@@ -23,7 +23,7 @@ function App() {
     getLastEvent(setMcLastEvent, setMcLastEventErr, setInitLoading);
 
     // keep React up-to-date with 
-    const source = new EventSource("http://192.168.1.249:3000/api/events");
+    const source = new EventSource("http://162.232.250.170/api/events");
     source.addEventListener("offline",  () => setMcLastEvent("offline"));
     source.addEventListener("starting", () => setMcLastEvent("starting"));
     source.addEventListener("online",   () => setMcLastEvent("online"));
