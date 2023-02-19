@@ -11,10 +11,8 @@ function getLastEvent(setStatus, setError, setLoading) {
     })
     .then(res_json => {
       if (res_json.ok) {
-        console.log("Parsed json in getLastEvent: ", res_json);
         setStatus(res_json.last_event);
       } else {
-        console.log("res_json.ok: ", res_json);
         throw "Server failed to return last event"
       }
     })
