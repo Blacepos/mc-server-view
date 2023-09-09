@@ -14,8 +14,8 @@ function App() {
   const [mc_last_event_err, setMcLastEventErr] = useState(null);
   const [init_loading, setInitLoading] = useState(true);
 
-
   useEffect(() => {
+    console.log(process.env.ADDRESS_HINT);
     // perform initial loading to get React in sync with Minecraft
     getLastEvent(setMcLastEvent, setMcLastEventErr, setInitLoading);
 
@@ -39,7 +39,7 @@ function App() {
   let content =
     (mc_last_event_err
     ? <>
-        <p>Unable to contact server: "{mc_last_event_err}"</p>
+        <p>Unable to contact server: "{mc_last_event_err.toString()}"</p>
       </>
     : (init_loading
       ? <>
@@ -55,8 +55,7 @@ function App() {
             <h2>Server is offline</h2>
             <button onClick={startServer}>Start Minecraft!</button>
           </>
-      )
-    ));
+    )));
 
   return (
     <main>

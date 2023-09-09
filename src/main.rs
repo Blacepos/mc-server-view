@@ -49,7 +49,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             api::events,
             api::last_event
         ])
-        .mount("/", routes![navigation::index])
+        .mount("/", rocket::fs::FileServer::from("ui/build"))
+        // .mount("/", routes![navigation::index])
         .launch()
         .await?;
 
